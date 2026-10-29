@@ -43,10 +43,15 @@ docker compose run --rm -e DATABASE_BACKEND=postgres garmin-fetch-data python /a
 ##### Dashboards
 
 `Grafana_Dashboard/convert_to_postgres.py` generates `*-Postgres.json` versions of the dashboards for
-Grafana's PostgreSQL data source. Query-builder panels are translated mechanically; hand-written
-InfluxQL needs a translation in the script's `RAW` table. It keeps InfluxDB's series names (target
-aliases, `measurement.mean`, ...), so panel overrides and transformations keep working, and it
-groups `tz('$TimeZone')` queries in that time zone with `date_bin`.
+Grafana's PostgreSQL data source:
+
+- **Query-builder panels** are translated mechanically.
+- **Hand-written InfluxQL** has translations in the script: `RAW` keyed by query text, and
+  `RAW_BY_PANEL` for the Strength Training dashboard.
+- **Series names** stay InfluxDB's (target aliases, `measurement.mean`, `$tag_…` names), so panel
+  overrides and transformations keep working.
+- **Time zones:** `tz('$TimeZone')` queries are grouped in that time zone with `date_bin`.
+- **Data source pickers and import inputs** are switched to PostgreSQL.
 
 ```
 python Grafana_Dashboard/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
@@ -72,12 +77,16 @@ Against a copy of a real database: 17 measurements, about 1.06 million points, 1
 - **Main dashboard:** all 142 panel queries were run through Grafana 13.2.5 against both databases
   over the last 30 and 365 days. 134 returned identical values and series names, 8 were empty in
   both, and 0 failed. They also render identically.
+- **Strength Training dashboard:** realistic workouts (790 sets, 240 HR-zone points, written as the
+  fetcher's own points to both databases), all 21 queries compared. The cases: every category and
+  a single category, over 7, 30, 120 and 400 days, plus a window with no workouts. Every query
+  returned identical values, text and series names, and in the empty window all were empty in
+  both. It renders as shipped, with its data source picker selecting PostgreSQL.
 - **Storage:** plain PostgreSQL 148 MB, TimescaleDB 190 MB, InfluxDB 54 MB (InfluxDB compresses;
   TimescaleDB's compression is under its non-OSI license).
 
 ##### Not done yet
 
-- The Strength Training dashboard is almost all hand-written InfluxQL: 21 queries still need SQL in `RAW`.
 - The "Battery Level" panel queries `"%"` (a GarminHomeAssistant placeholder) and is left disabled.
 - `influxdb_exporter.py` (CSV export) still reads InfluxDB only.
 - No InfluxDB 3 → PostgreSQL migration (InfluxDB 3 speaks InfluxQL, so it may only need its client).

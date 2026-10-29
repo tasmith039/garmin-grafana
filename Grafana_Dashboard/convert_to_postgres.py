@@ -37,6 +37,72 @@ RAW = {
        f'WHERE "SleepStageLevel" = {n} AND $__timeFilter(time) ORDER BY 1' for n in range(4)},
 }
 
+# Strength Training dashboard: hand translations by (panel title, refId); its InfluxQL is all raw.
+SETS = '"StrengthExerciseSet"'
+WORKING = ('"Weight_kg" > 0 AND "ExerciseLabel" <> \'ROW/INDOOR_ROW\' AND "ExerciseCategory" <> \'RUN\' AND $__timeFilter(time)')
+CATEGORY, LABEL = ' AND "ExerciseCategory" IN ($ExerciseCategory)', ' AND "ExerciseLabel" IN ($ExerciseLabel)'
+VOLUME, EPLEY = '"Reps" * "Weight_kg"', '"Weight_kg" * (1 + "Reps" / 30.0)'
+# GROUP BY time(1d) without tz(): UTC days. (Not $__timeGroup: it returns epoch numbers, which can't be grouped again.)
+DAY = "date_bin('1 day', time, TIMESTAMPTZ '1970-01-01 00:00:00+00')"
+DAILY_VOLUME = f"SELECT {DAY} AS day, sum({VOLUME}) AS dvol FROM {SETS} WHERE {WORKING} GROUP BY 1"
+# Aggregates over the whole range have no time of their own; InfluxDB reports the range start.
+RANGE_START = "$__timeFrom()::timestamptz"  # the macro alone is a text literal
+WHOLE_RANGE = f'{RANGE_START} AS "time"'
+RAW_BY_PANEL = {
+    ("Total Volume", "A"): f'SELECT {WHOLE_RANGE}, sum({VOLUME}) AS "{{name}}" FROM {SETS} WHERE {WORKING} HAVING count({VOLUME}) > 0',
+    ("Weighted Sets", "A"): f'SELECT {WHOLE_RANGE}, count("Reps") AS "{{name}}" FROM {SETS} WHERE {WORKING} HAVING count("Reps") > 0',
+    ("Total Reps", "A"): f'SELECT {WHOLE_RANGE}, sum("Reps") AS "{{name}}" FROM {SETS} WHERE {WORKING} HAVING count("Reps") > 0',
+    ("Number of Workouts", "A"): f'SELECT {WHOLE_RANGE}, count(dvol) AS "{{name}}" FROM ({DAILY_VOLUME}) d HAVING count(dvol) > 0',
+    ("Avg Volume / Workout", "A"): f'SELECT {WHOLE_RANGE}, avg(dvol) AS "{{name}}" FROM ({DAILY_VOLUME}) d HAVING count(dvol) > 0',
+    ("Estimated 1RM Progression (Epley) by Exercise", "A"):
+        f'SELECT $__timeGroupAlias(time, \'1d\'), "ExerciseLabel" AS metric, max({EPLEY}) AS e1rm FROM {SETS} '
+        f'WHERE {WORKING}{CATEGORY}{LABEL} GROUP BY 1, 2 ORDER BY 1',
+    ("Training Volume per Workout", "A"):
+        f'SELECT $__timeGroupAlias(time, \'1d\'), sum({VOLUME}) AS "{{name}}" FROM {SETS} WHERE {WORKING} GROUP BY 1 ORDER BY 1',
+    ("Personal Records (Top Set & Est. 1RM)", "A"):
+        f'SELECT {RANGE_START} AS "Time", "ExerciseLabel", max("Weight_kg") AS "Max Weight (kg)", max({EPLEY}) AS "Best Est. 1RM (kg)" '
+        f'FROM {SETS} WHERE {WORKING}{CATEGORY}{LABEL} GROUP BY 2 ORDER BY 2',
+    ("Volume by Category", "A"):
+        f'SELECT {WHOLE_RANGE}, "ExerciseCategory" AS metric, sum({VOLUME}) AS "Volume" FROM {SETS} WHERE {WORKING}{CATEGORY} GROUP BY 2 ORDER BY 2',
+    ("Sets by Category", "A"):
+        f'SELECT {RANGE_START} AS "Time", "ExerciseCategory", count("Reps") AS "Sets" FROM {SETS} WHERE {WORKING}{CATEGORY} GROUP BY 2 ORDER BY 2',
+    ("Recent Sets (Workout Detail)", "A"):
+        f'SELECT time AS "Time", "ExerciseLabel" AS "Exercise", "Reps", "Weight_kg" AS "Weight (kg)", {VOLUME} AS "Volume (kg)", '
+        f'"SetOrder" AS "Set #" FROM {SETS} WHERE {WORKING}{CATEGORY}{LABEL} ORDER BY time DESC LIMIT 100',
+    ("Workout Summary (per session)", "A"):
+        f'SELECT {DAY} AS "Time", count("Reps") AS "Sets", sum("Reps") AS "Reps", sum({VOLUME}) AS "Volume (kg)", '
+        f'sum("Duration_s") AS "Time Under Tension (s)" FROM {SETS} WHERE {WORKING} GROUP BY 1 ORDER BY 1',
+    **{("HR Zone Time Distribution (Strength Sessions)", ref):
+        f'SELECT {WHOLE_RANGE}, sum("SecsInZone") AS "{{name}}" FROM "StrengthHRZones" WHERE "ZoneNumber" = {n} '
+        f'AND $__timeFilter(time) HAVING count("SecsInZone") > 0' for n, ref in enumerate("ABCDE", 1)},
+    ("Time Under Tension by Exercise", "A"):
+        f'SELECT {RANGE_START} AS "Time", "ExerciseLabel", sum("Duration_s") AS "Total Time Under Tension (s)" FROM {SETS} '
+        f'WHERE {WORKING}{CATEGORY}{LABEL} GROUP BY 2 ORDER BY 2',
+    # InfluxDB fills this subquery's weeks (Thursday-based, from the epoch) from the week of the first
+    # workout in the range to the end of the range, so the weeks are generated here, not by the macro.
+    ("Workouts per Week", "A"):
+        f"WITH d AS ({DAILY_VOLUME}) SELECT w.time, count(d.dvol) AS \"{{name}}\" FROM generate_series("
+        f"(SELECT date_bin('1 week', min(day) FILTER (WHERE dvol IS NOT NULL), TIMESTAMPTZ '1970-01-01 00:00:00+00') FROM d), "
+        f"$__timeTo()::timestamptz, interval '1 week') AS w(time) "
+        f"LEFT JOIN d ON d.day >= w.time AND d.day < w.time + interval '1 week' GROUP BY 1 ORDER BY 1",
+    ("Workout Calendar", "A"):
+        f'SELECT $__timeGroupAlias(time, \'1d\', 0), count("Reps") AS "{{name}}" FROM {SETS} WHERE {WORKING} GROUP BY 1 ORDER BY 1',
+    ("Sets Needing Classification (UNKNOWN)", "A"):
+        f'SELECT {WHOLE_RANGE}, count("Reps") AS "{{name}}" FROM {SETS} WHERE "ExerciseCategory" = \'UNKNOWN\' AND $__timeFilter(time) '
+        f'HAVING count("Reps") > 0',
+}
+
+RAW_TABLES = {
+    "StrengthExerciseSet": {"tags": ["ExerciseCategory", "ExerciseLabel"], "fields": ["Reps", "Weight_kg", "Duration_s", "SetOrder"]},
+    "StrengthHRZones": {"tags": [], "fields": ["ZoneNumber", "SecsInZone"]},
+}
+
+# Dashboard variables whose InfluxQL can't be translated by the SHOW TAG VALUES pattern alone.
+RAW_VARIABLES = {
+    'SHOW TAG VALUES FROM "StrengthExerciseSet" WITH KEY = "ExerciseLabel" WHERE ExerciseCategory =~ /^$ExerciseCategory$/':
+        'SELECT DISTINCT "ExerciseLabel" FROM "StrengthExerciseSet" WHERE "ExerciseCategory" IN ($ExerciseCategory) ORDER BY 1',
+}
+
 
 def q(name):
     name = re.sub(r"::(tag|field)$", "", name)  # the builder's type hints, e.g. "ActivitySelector::tag"
@@ -170,14 +236,15 @@ def convert(dashboard):
             if not t.get("rawQuery") and t.get("tz") and group.get("fill") == "null":
                 gaps.add(interval_ms(group.get("time")))
             if t.get("rawQuery"):
-                sql = RAW.get(t["query"])
+                sql = RAW.get(t["query"]) or RAW_BY_PANEL.get((p["title"], t["refId"]))
                 if sql:
                     m = re.search(r'FROM "(\w+)"', t["query"])
                     sql = sql.replace("{name}", series_name(t, m[1] if m else "", "value").replace('"', '""'))
             else:
                 sql = builder_sql(t)
             source = t.get("query") or f"measurement {t.get('measurement')!r}"
-            new = {"refId": t["refId"], "datasource": DATASOURCE, "editorMode": "code", "format": "time_series",
+            new = {"refId": t["refId"], "datasource": DATASOURCE, "editorMode": "code",
+                   "format": "table" if t.get("resultFormat") == "table" else "time_series",
                    "rawQuery": True, "rawSql": sql or f"-- no PostgreSQL translation yet for: {source}"}
             if t.get("hide") or not sql:
                 new["hide"] = True
@@ -190,10 +257,22 @@ def convert(dashboard):
             custom = p.setdefault("fieldConfig", {}).setdefault("defaults", {}).setdefault("custom", {})
             custom.setdefault("insertNulls", max(gaps))
     for v in out.get("templating", {}).get("list", []):
+        if v.get("type") == "datasource" and v.get("query") == "influxdb":
+            # A data source picker (the Strength dashboard's DS_GARMIN_STATS): make it pick PostgreSQL
+            # sources, under the name the converted panels refer to.
+            v.update({"name": "DS_GARMIN_STATS_PG", "query": "grafana-postgresql-datasource", "current": {}})
+            continue
         if (v.get("datasource") or {}).get("type") == "influxdb":
-            m = re.match(r'SHOW TAG VALUES FROM "(\w+)" WITH KEY = "(\w+)"', (v.get("query") or {}).get("query", "") if isinstance(v.get("query"), dict) else v.get("query", ""))
+            text = (v.get("query") or {}).get("query", "") if isinstance(v.get("query"), dict) else v.get("query", "")
+            m = re.fullmatch(r'SHOW TAG VALUES FROM "(\w+)" WITH KEY = "(\w+)"( WHERE \$timeFilter)?', text)
             v["datasource"] = DATASOURCE
-            v["query"] = v["definition"] = f'SELECT DISTINCT {q(m[2])} FROM {q(m[1])} WHERE $__timeFilter(time) ORDER BY 1' if m else v.get("query")
+            if text in RAW_VARIABLES:
+                v["query"] = v["definition"] = RAW_VARIABLES[text]
+            elif m:
+                time_filter = " WHERE $__timeFilter(time)" if m[3] else ""
+                v["query"] = v["definition"] = f'SELECT DISTINCT {q(m[2])} FROM {q(m[1])}{time_filter} ORDER BY 1'
+            else:
+                missing.append(f"variable {v['name']}: {text}")
     out["title"] = dashboard.get("title", "Garmin") + " (PostgreSQL)"
     out["uid"] = (dashboard.get("uid") or "garmin") + "-pg"
     return out, missing
@@ -211,6 +290,10 @@ if __name__ == "__main__":
         for name, cols in referenced_tables(original).items():
             t = tables.setdefault(name, {"tags": set(), "fields": set()})
             t["tags"] |= cols["tags"]; t["fields"] |= cols["fields"]
+    # The Strength dashboard's InfluxQL is all raw, so its tables are listed here (RAW_BY_PANEL uses them).
+    for name, cols in RAW_TABLES.items():
+        t = tables.setdefault(name, {"tags": set(), "fields": set()})
+        t["tags"] |= set(cols["tags"]); t["fields"] |= set(cols["fields"])
     # The tables the fetcher creates at startup with the postgres backend (PostgresClient.ensure_tables).
     out = Path(__file__).resolve().parent.parent / "src" / "garmin_grafana" / "postgres_dashboard_tables.json"
     out.write_text(json.dumps({k: {"tags": sorted(v["tags"]), "fields": sorted(v["fields"] - v["tags"])}

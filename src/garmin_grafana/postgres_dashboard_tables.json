@@ -129,6 +129,25 @@
    "StepsCount"
   ]
  },
+ "StrengthExerciseSet": {
+  "tags": [
+   "ExerciseCategory",
+   "ExerciseLabel"
+  ],
+  "fields": [
+   "Duration_s",
+   "Reps",
+   "SetOrder",
+   "Weight_kg"
+  ]
+ },
+ "StrengthHRZones": {
+  "tags": [],
+  "fields": [
+   "SecsInZone",
+   "ZoneNumber"
+  ]
+ },
  "StressIntraday": {
   "tags": [],
   "fields": [

@@ -94,8 +94,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(vol) AS total_volume FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter)",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"Reps\" * \"Weight_kg\") AS \"Total Volume\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) HAVING count(\"Reps\" * \"Weight_kg\") > 0"
         }
       ],
       "title": "Total Volume",
@@ -161,8 +160,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(Reps) AS total_sets FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", count(\"Reps\") AS \"Weighted Sets\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) HAVING count(\"Reps\") > 0"
         }
       ],
       "title": "Weighted Sets",
@@ -228,8 +226,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(Reps) AS total_reps FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"Reps\") AS \"Total Reps\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) HAVING count(\"Reps\") > 0"
         }
       ],
       "title": "Total Reps",
@@ -295,8 +292,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(dvol) AS workouts FROM (SELECT SUM(vol) AS dvol FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter) GROUP BY time(1d) fill(none))",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", count(dvol) AS \"Workouts\" FROM (SELECT date_bin('1 day', time, TIMESTAMPTZ '1970-01-01 00:00:00+00') AS day, sum(\"Reps\" * \"Weight_kg\") AS dvol FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1) d HAVING count(dvol) > 0"
         }
       ],
       "title": "Number of Workouts",
@@ -363,8 +359,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT MEAN(dvol) AS avg_volume FROM (SELECT SUM(vol) AS dvol FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter) GROUP BY time(1d) fill(none))",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", avg(dvol) AS \"Avg Volume\" FROM (SELECT date_bin('1 day', time, TIMESTAMPTZ '1970-01-01 00:00:00+00') AS day, sum(\"Reps\" * \"Weight_kg\") AS dvol FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1) d HAVING count(dvol) > 0"
         }
       ],
       "title": "Avg Volume / Workout",
@@ -475,8 +470,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT MAX(epley) AS e1rm FROM (SELECT Weight_kg*(1+Reps/30.0) AS epley FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND ExerciseLabel =~ /^$ExerciseLabel$/ AND $timeFilter) GROUP BY time(1d), ExerciseLabel fill(none)",
-          "hide": true
+          "rawSql": "SELECT $__timeGroupAlias(time, '1d'), \"ExerciseLabel\" AS metric, max(\"Weight_kg\" * (1 + \"Reps\" / 30.0)) AS e1rm FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) AND \"ExerciseLabel\" IN ($ExerciseLabel) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "title": "Estimated 1RM Progression (Epley) by Exercise",
@@ -571,8 +565,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(vol) AS Volume FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter) GROUP BY time(1d) fill(none)",
-          "hide": true
+          "rawSql": "SELECT $__timeGroupAlias(time, '1d'), sum(\"Reps\" * \"Weight_kg\") AS \"Volume\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Training Volume per Workout",
@@ -719,10 +712,9 @@
             "uid": "${DS_GARMIN_STATS_PG}"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT MAX(Weight_kg) AS \"Max Weight (kg)\", MAX(epley) AS \"Best Est. 1RM (kg)\" FROM (SELECT Weight_kg, Weight_kg*(1+Reps/30.0) AS epley FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND ExerciseLabel =~ /^$ExerciseLabel$/ AND $timeFilter) GROUP BY ExerciseLabel",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"Time\", \"ExerciseLabel\", max(\"Weight_kg\") AS \"Max Weight (kg)\", max(\"Weight_kg\" * (1 + \"Reps\" / 30.0)) AS \"Best Est. 1RM (kg)\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) AND \"ExerciseLabel\" IN ($ExerciseLabel) GROUP BY 2 ORDER BY 2"
         }
       ],
       "title": "Personal Records (Top Set & Est. 1RM)",
@@ -821,8 +813,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(vol) AS Volume FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND $timeFilter) GROUP BY ExerciseCategory",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", \"ExerciseCategory\" AS metric, sum(\"Reps\" * \"Weight_kg\") AS \"Volume\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) GROUP BY 2 ORDER BY 2"
         }
       ],
       "title": "Volume by Category",
@@ -916,10 +907,9 @@
             "uid": "${DS_GARMIN_STATS_PG}"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(Reps) AS Sets FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND $timeFilter GROUP BY ExerciseCategory",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"Time\", \"ExerciseCategory\", count(\"Reps\") AS \"Sets\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) GROUP BY 2 ORDER BY 2"
         }
       ],
       "title": "Sets by Category",
@@ -1084,10 +1074,9 @@
             "uid": "${DS_GARMIN_STATS_PG}"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT ExerciseLabel AS \"Exercise\", Reps, Weight_kg AS \"Weight (kg)\", Reps*Weight_kg AS \"Volume (kg)\", SetOrder AS \"Set #\" FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND ExerciseLabel =~ /^$ExerciseLabel$/ AND $timeFilter ORDER BY time DESC LIMIT 100",
-          "hide": true
+          "rawSql": "SELECT time AS \"Time\", \"ExerciseLabel\" AS \"Exercise\", \"Reps\", \"Weight_kg\" AS \"Weight (kg)\", \"Reps\" * \"Weight_kg\" AS \"Volume (kg)\", \"SetOrder\" AS \"Set #\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) AND \"ExerciseLabel\" IN ($ExerciseLabel) ORDER BY time DESC LIMIT 100"
         }
       ],
       "title": "Recent Sets (Workout Detail)",
@@ -1212,10 +1201,9 @@
             "uid": "${DS_GARMIN_STATS_PG}"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(Reps) AS \"Sets\", SUM(Reps) AS \"Reps\", SUM(vol) AS \"Volume (kg)\", SUM(dur) AS \"Time Under Tension (s)\" FROM (SELECT Reps, Reps*Weight_kg AS vol, Duration_s AS dur FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter) GROUP BY time(1d) fill(none)",
-          "hide": true
+          "rawSql": "SELECT date_bin('1 day', time, TIMESTAMPTZ '1970-01-01 00:00:00+00') AS \"Time\", count(\"Reps\") AS \"Sets\", sum(\"Reps\") AS \"Reps\", sum(\"Reps\" * \"Weight_kg\") AS \"Volume (kg)\", sum(\"Duration_s\") AS \"Time Under Tension (s)\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Workout Summary (per session)",
@@ -1302,8 +1290,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(SecsInZone) AS secs FROM \"StrengthHRZones\" WHERE ZoneNumber=1 AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"SecsInZone\") AS \"Zone 1\" FROM \"StrengthHRZones\" WHERE \"ZoneNumber\" = 1 AND $__timeFilter(time) HAVING count(\"SecsInZone\") > 0"
         },
         {
           "refId": "B",
@@ -1314,8 +1301,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(SecsInZone) AS secs FROM \"StrengthHRZones\" WHERE ZoneNumber=2 AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"SecsInZone\") AS \"Zone 2\" FROM \"StrengthHRZones\" WHERE \"ZoneNumber\" = 2 AND $__timeFilter(time) HAVING count(\"SecsInZone\") > 0"
         },
         {
           "refId": "C",
@@ -1326,8 +1312,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(SecsInZone) AS secs FROM \"StrengthHRZones\" WHERE ZoneNumber=3 AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"SecsInZone\") AS \"Zone 3\" FROM \"StrengthHRZones\" WHERE \"ZoneNumber\" = 3 AND $__timeFilter(time) HAVING count(\"SecsInZone\") > 0"
         },
         {
           "refId": "D",
@@ -1338,8 +1323,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(SecsInZone) AS secs FROM \"StrengthHRZones\" WHERE ZoneNumber=4 AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"SecsInZone\") AS \"Zone 4\" FROM \"StrengthHRZones\" WHERE \"ZoneNumber\" = 4 AND $__timeFilter(time) HAVING count(\"SecsInZone\") > 0"
         },
         {
           "refId": "E",
@@ -1350,8 +1334,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(SecsInZone) AS secs FROM \"StrengthHRZones\" WHERE ZoneNumber=5 AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", sum(\"SecsInZone\") AS \"Zone 5\" FROM \"StrengthHRZones\" WHERE \"ZoneNumber\" = 5 AND $__timeFilter(time) HAVING count(\"SecsInZone\") > 0"
         }
       ],
       "title": "HR Zone Time Distribution (Strength Sessions)",
@@ -1445,10 +1428,9 @@
             "uid": "${DS_GARMIN_STATS_PG}"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT SUM(Duration_s) AS \"Total Time Under Tension (s)\" FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND ExerciseCategory =~ /^$ExerciseCategory$/ AND ExerciseLabel =~ /^$ExerciseLabel$/ AND $timeFilter GROUP BY ExerciseLabel",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"Time\", \"ExerciseLabel\", sum(\"Duration_s\") AS \"Total Time Under Tension (s)\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) AND \"ExerciseCategory\" IN ($ExerciseCategory) AND \"ExerciseLabel\" IN ($ExerciseLabel) GROUP BY 2 ORDER BY 2"
         }
       ],
       "title": "Time Under Tension by Exercise",
@@ -1556,8 +1538,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(dvol) AS Workouts FROM (SELECT SUM(vol) AS dvol FROM (SELECT Reps*Weight_kg AS vol FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter) GROUP BY time(1d) fill(none)) GROUP BY time(1w) fill(0)",
-          "hide": true
+          "rawSql": "WITH d AS (SELECT date_bin('1 day', time, TIMESTAMPTZ '1970-01-01 00:00:00+00') AS day, sum(\"Reps\" * \"Weight_kg\") AS dvol FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1) SELECT w.time, count(d.dvol) AS \"Workouts\" FROM generate_series((SELECT date_bin('1 week', min(day) FILTER (WHERE dvol IS NOT NULL), TIMESTAMPTZ '1970-01-01 00:00:00+00') FROM d), $__timeTo()::timestamptz, interval '1 week') AS w(time) LEFT JOIN d ON d.day >= w.time AND d.day < w.time + interval '1 week' GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Workouts per Week",
@@ -1661,8 +1642,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(Reps) AS sets FROM \"StrengthExerciseSet\" WHERE Weight_kg > 0 AND ExerciseLabel != 'ROW/INDOOR_ROW' AND ExerciseCategory != 'RUN' AND $timeFilter GROUP BY time(1d) fill(0)",
-          "hide": true
+          "rawSql": "SELECT $__timeGroupAlias(time, '1d', 0), count(\"Reps\") AS \"Workout\" FROM \"StrengthExerciseSet\" WHERE \"Weight_kg\" > 0 AND \"ExerciseLabel\" <> 'ROW/INDOOR_ROW' AND \"ExerciseCategory\" <> 'RUN' AND $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Workout Calendar",
@@ -1735,8 +1715,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "-- no PostgreSQL translation yet for: SELECT COUNT(Reps) AS unknown_sets FROM \"StrengthExerciseSet\" WHERE ExerciseCategory='UNKNOWN' AND $timeFilter",
-          "hide": true
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", count(\"Reps\") AS \"Unknown\" FROM \"StrengthExerciseSet\" WHERE \"ExerciseCategory\" = 'UNKNOWN' AND $__timeFilter(time) HAVING count(\"Reps\") > 0"
         }
       ],
       "title": "Sets Needing Classification (UNKNOWN)",
@@ -1759,10 +1738,10 @@
         "current": {},
         "includeAll": false,
         "multi": false,
-        "name": "DS_GARMIN_STATS",
+        "name": "DS_GARMIN_STATS_PG",
         "label": "Data source",
         "options": [],
-        "query": "influxdb",
+        "query": "grafana-postgresql-datasource",
         "refresh": 1,
         "regex": "",
         "type": "datasource"
@@ -1774,13 +1753,13 @@
           "type": "grafana-postgresql-datasource",
           "uid": "${DS_GARMIN_STATS_PG}"
         },
-        "definition": "SELECT DISTINCT \"ExerciseCategory\" FROM \"StrengthExerciseSet\" WHERE $__timeFilter(time) ORDER BY 1",
+        "definition": "SELECT DISTINCT \"ExerciseCategory\" FROM \"StrengthExerciseSet\" ORDER BY 1",
         "includeAll": true,
         "multi": true,
         "name": "ExerciseCategory",
         "label": "Exercise Category",
         "options": [],
-        "query": "SELECT DISTINCT \"ExerciseCategory\" FROM \"StrengthExerciseSet\" WHERE $__timeFilter(time) ORDER BY 1",
+        "query": "SELECT DISTINCT \"ExerciseCategory\" FROM \"StrengthExerciseSet\" ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "sort": 1,
@@ -1793,13 +1772,13 @@
           "type": "grafana-postgresql-datasource",
           "uid": "${DS_GARMIN_STATS_PG}"
         },
-        "definition": "SELECT DISTINCT \"ExerciseLabel\" FROM \"StrengthExerciseSet\" WHERE $__timeFilter(time) ORDER BY 1",
+        "definition": "SELECT DISTINCT \"ExerciseLabel\" FROM \"StrengthExerciseSet\" WHERE \"ExerciseCategory\" IN ($ExerciseCategory) ORDER BY 1",
         "includeAll": true,
         "multi": true,
         "name": "ExerciseLabel",
         "label": "Exercise",
         "options": [],
-        "query": "SELECT DISTINCT \"ExerciseLabel\" FROM \"StrengthExerciseSet\" WHERE $__timeFilter(time) ORDER BY 1",
+        "query": "SELECT DISTINCT \"ExerciseLabel\" FROM \"StrengthExerciseSet\" WHERE \"ExerciseCategory\" IN ($ExerciseCategory) ORDER BY 1",
         "refresh": 1,
         "regex": "",
         "sort": 1,
