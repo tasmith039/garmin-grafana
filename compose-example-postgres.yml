@@ -1,0 +1,77 @@
+# The same stack with PostgreSQL instead of InfluxDB (see docs/postgres-backend.md).
+# Grafana provisions from Grafana_Postgres/ instead of Grafana_Datasource/ and Grafana_Dashboard/.
+
+services:
+  garmin-fetch-data:
+    restart: unless-stopped
+    image: thisisarpanghosh/garmin-fetch-data:latest
+    container_name: garmin-fetch-data
+    # user: root # Runs the container as root user, uncomment this line if you are getting permission issues which can't be resolved otherwise. For this, you also need to change the below volume mount from './garminconnect-tokens:/home/appuser/.garminconnect' to './garminconnect-tokens:/root/.garminconnect' to ensure the token files persist during container rebuilding.
+    depends_on:
+      - postgres
+    volumes:
+      - ./garminconnect-tokens:/home/appuser/.garminconnect # (persistent tokens storage - garminconnect-tokens folder must be owned by 1000:1000) - should be './garminconnect-tokens:/root/.garminconnect' instead if you are using using user: root
+    environment:
+      - DATABASE_BACKEND=postgres
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=garmin
+      - POSTGRES_PASSWORD=postgres_secret_password
+      - POSTGRES_DATABASE=garmin_stats
+      - GARMINCONNECT_IS_CN=False # Set this to True if you are in mainland China or use Garmin-cn (Default False)
+      #####################################################################################
+      # - GARMINCONNECT_EMAIL=your_garminconnect_email # optional, read the setup docs. (remove or comment out this line altogether if not used)
+      # - GARMINCONNECT_BASE64_PASSWORD=your_base64_encoded_garminconnect_password # optional, must be Base64 encoded, read setup docs. (remove or comment out this line altogether if not used)
+      #####################################################################################
+      # - POSTGRES_SSLMODE=prefer # libpq sslmode: disable, prefer, require, verify-full (use require or verify-full for a database across the internet)
+      # - POSTGRES_TIMESCALE=False # Set this to True to store each measurement as a TimescaleDB hypertable (needs the timescale/timescaledb image below)
+      #####################################################################################
+      # The following ENV variables will override some default settings.
+      # Please read the README guide before using them as they may change how the script behaves
+      #####################################################################################
+      # - LOG_LEVEL=INFO # change to DEBUG to get DEBUG logs
+      # - UPDATE_INTERVAL_SECONDS=300 # Default update check interval is set to 5 minutes
+      # - FETCH_SELECTION=daily_avg,sleep,steps,heartrate,stress,breathing,hrv,vo2,activity,race_prediction,body_composition # This enables selection of fetch data : Check Discussion #119 to know what additional options are available (add them seperated by , but without a space)
+      # - KEEP_FIT_FILES=False # Stores the FIT files (downloads and saves them) when set to True - read docs for more details
+      # - ALWAYS_PROCESS_FIT_FILES=False # Enables processing FIT files even if GPS data is not present in it when set to True, default False
+      # - USER_TIMEZONE= # Can hardcode user's timezone - must be a valid TZ identifier like Europe/Budapest without quotes, fetches timezone automatically and dynamically on each run if set to empty (default) - Read docs
+      # - FORCE_REPROCESS_ACTIVITIES=True # Enables re-processing of FIT files on iterative updates when set to True (default), setting to False may save processing time but known for skipping activities
+
+  postgres:
+    restart: unless-stopped
+    container_name: postgres
+    hostname: postgres
+    environment:
+      - POSTGRES_USER=garmin
+      - POSTGRES_PASSWORD=postgres_secret_password
+      - POSTGRES_DB=garmin_stats
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    image: 'postgres:17' # or 'timescale/timescaledb:latest-pg17' with POSTGRES_TIMESCALE=True on garmin-fetch-data
+
+  grafana:
+    restart: unless-stopped
+    container_name: grafana
+    hostname: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_PLUGINS_PREINSTALL=marcusolsson-hourly-heatmap-panel
+      - GF_DATE_FORMATS_FULL_DATE=MMM Do, YYYY - hh:mm:ss a
+      - GF_DATE_FORMATS_INTERVAL_SECOND=hh:mm:ss a
+      - GF_DATE_FORMATS_INTERVAL_MINUTE=hh:mm a
+      - GF_DATE_FORMATS_INTERVAL_HOUR=MMM DD hh:mm a
+      - GF_DATE_FORMATS_INTERVAL_DAY=MMM DD
+      - GF_DATE_FORMATS_INTERVAL_MONTH=YYYY-MM
+      - GF_DATE_FORMATS_INTERVAL_YEAR=YYYY
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./Grafana_Postgres/datasource:/etc/grafana/provisioning/datasources # (optional) Self provisioning PostgreSQL datasource
+      - ./Grafana_Postgres/dashboards:/etc/grafana/provisioning/dashboards # (optional) self provisioning grafana dashboards
+    ports:
+      - '3000:3000'
+    image: 'grafana/grafana:latest'
+
+volumes:
+  postgres_data:
+  grafana_data:

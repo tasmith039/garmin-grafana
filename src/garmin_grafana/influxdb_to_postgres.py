@@ -1,4 +1,4 @@
-"""Copy an existing garmin-grafana InfluxDB 1.x database into PostgreSQL.
+"""Copy an existing garmin-grafana InfluxDB (1.x, or 3.x with INFLUXDB_VERSION=3) database into PostgreSQL.
 
 Uses the same INFLUXDB_* and POSTGRES_* environment variables as garmin_fetch.py, and writes through
 the postgres backend, so the tables come out exactly as the fetcher would create them. Safe to run
@@ -29,7 +29,35 @@ BATCH = 20000
 WINDOW_NS = 30 * 86400 * 10**9  # read 30 days at a time (influxdb-python's chunked mode breaks with msgpack)
 
 
+class Rows(list):
+    def get_points(self):
+        return iter(self)
+
+
+class Influx3:
+    """InfluxDB 3 through its InfluxQL support, answering queries the way influxdb-python does."""
+
+    def __init__(self):
+        from influxdb_client_3 import InfluxDBClient3
+        scheme = "https" if os.getenv("INFLUXDB_ENDPOINT_IS_HTTP", "true").lower() in ("false", "f", "no", "0") else "http"
+        self.client = InfluxDBClient3(host=f"{scheme}://{os.getenv('INFLUXDB_HOST', 'localhost')}:{os.getenv('INFLUXDB_PORT', 8181)}",
+                                      token=os.getenv("INFLUXDB_V3_ACCESS_TOKEN", ""),
+                                      database=os.getenv("INFLUXDB_DATABASE", "GarminStats"))
+
+    def query(self, query, epoch=None):
+        table = self.client.query(query, language="influxql")
+        rows = table.to_pylist()
+        if "time" in table.column_names:  # nanoseconds since the epoch, as epoch="ns" gives in 1.x
+            for row, ns in zip(rows, table.column("time").cast("int64").to_pylist()):
+                row["time"] = ns
+        for row in rows:
+            row.pop("iox::measurement", None)
+        return Rows(rows)
+
+
 def influx():
+    if os.getenv("INFLUXDB_VERSION", "1") == "3":
+        return Influx3()
     client = InfluxDBClient(host=os.getenv("INFLUXDB_HOST", "localhost"), port=int(os.getenv("INFLUXDB_PORT", 8086)),
                             username=os.getenv("INFLUXDB_USERNAME", ""), password=os.getenv("INFLUXDB_PASSWORD", ""),
                             database=os.getenv("INFLUXDB_DATABASE", "GarminStats"))

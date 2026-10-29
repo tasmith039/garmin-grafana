@@ -1,8 +1,9 @@
 """Make a PostgreSQL version of an InfluxDB Grafana dashboard for the postgres backend.
 
-  python Grafana_Dashboard/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json
+  python Grafana_Postgres/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
 
-Writes <name>-Postgres.json next to it. Query-builder targets (the structured InfluxQL ones) are
+Writes Grafana_Postgres/dashboards/<name>-Postgres.json (kept out of Grafana_Dashboard/, which InfluxDB
+installs provision wholesale), and src/garmin_grafana/postgres_dashboard_tables.json. Query-builder targets (the structured InfluxQL ones) are
 translated mechanically to Grafana's PostgreSQL macros; raw InfluxQL targets come from RAW below,
 and any raw query without a translation is reported and left disabled in the output.
 
@@ -284,7 +285,7 @@ if __name__ == "__main__":
         src = Path(path)
         original = json.loads(src.read_text())
         dashboard, missing = convert(original)
-        dst = src.with_name(src.stem + "-Postgres.json")
+        dst = Path(__file__).resolve().parent / "dashboards" / (src.stem + "-Postgres.json")
         dst.write_text(json.dumps(dashboard, indent=2) + "\n")
         print(f"{dst}: {len(missing)} raw queries without a translation" + "".join(f"\n  {m}" for m in missing))
         for name, cols in referenced_tables(original).items():

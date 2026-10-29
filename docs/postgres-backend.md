@@ -1,71 +1,104 @@
-### PostgreSQL backend (proof of concept)
+### PostgreSQL backend
 
-garmin-grafana can store its data in PostgreSQL instead of InfluxDB. TimescaleDB is optional. This
-is the "wrapper that keeps the line-protocol-style writes" idea from
-[discussion #56](https://github.com/arpanghosh8453/garmin-grafana/discussions/56): the fetcher still
-builds the same points, and `postgres_backend.py` stores them the way InfluxDB would.
+garmin-grafana can store its data in PostgreSQL instead of InfluxDB, with optional TimescaleDB. The
+fetcher still builds the same points, and `postgres_backend.py` stores them the way InfluxDB would,
+so the rest of the project works unchanged. This is the wrapper idea from
+[discussion #56](https://github.com/arpanghosh8453/garmin-grafana/discussions/56).
 
 ##### How data is stored
 
-- One table per measurement (`"HeartRateIntraday"`, `"SleepSummary"`, ...), created on first write,
-  with a `time` column, one text column per tag and one column per field. New tags and fields add
-  columns as they appear, so the schema follows the data like InfluxDB's does.
-- A point is identified by its time and tag values. Writing it again overwrites the fields it carries
-  and keeps the others, which is how InfluxDB merges re-fetched days. No duplicates, no setup.
-- Integer columns widen to double precision when a decimal arrives. A value that can't be stored in a
-  column's type is skipped with a warning, the way InfluxDB rejects it.
-- At startup the fetcher creates the tables the dashboards query (`postgres_dashboard_tables.json`),
-  so panels for data your account doesn't have show "No data" rather than an error.
-- `POSTGRES_TIMESCALE=true` makes each table a TimescaleDB hypertable (one-year chunks) when the
-  extension is available. Plain PostgreSQL is enough for this data volume.
+- **Tables:** one table per measurement (`"HeartRateIntraday"`, `"SleepSummary"`, ...), created on
+  first write, with a `time` column, one text column per tag and one column per field. New tags and
+  fields add columns as they appear, like InfluxDB.
+- **Re-writes:** a point is identified by its time and tag values. Writing it again overwrites the
+  fields it carries and keeps the others, which is how InfluxDB merges re-fetched days. There are no
+  duplicates and nothing to set up.
+- **Field types:** integer columns widen to double precision when a decimal arrives. A value that
+  can't be stored in a column's type is skipped with a warning, the way InfluxDB rejects it.
+- **Tables before data:** at startup the fetcher creates the tables the dashboards query
+  (`postgres_dashboard_tables.json`), so panels for data an account doesn't have show "No data"
+  rather than an error. A column with no values yet takes the type of the first value written.
+- **TimescaleDB:** with `POSTGRES_TIMESCALE=true`, each table becomes a hypertable (one-year chunks)
+  when the extension is available. Plain PostgreSQL is plenty for a person's Garmin data.
 
-##### Settings
+##### New install
+
+Follow the README's manual install with two changes:
+
+1. Use [compose-example-postgres.yml](../compose-example-postgres.yml) as your `compose.yml`.
+2. For step 5, Grafana self-provisioning, run:
+
+```
+sed -i 's/\${DS_GARMIN_STATS_PG}/garmin_postgres/g' Grafana_Postgres/dashboards/Garmin-Grafana-Dashboard-Postgres.json
+```
+
+The Strength Training dashboard picks its data source from a dropdown and needs no `sed`. To import
+the dashboards by hand, use the two JSON files in `Grafana_Postgres/dashboards/` with a PostgreSQL
+data source.
 
 | Variable | Default | |
 |---|---|---|
 | `DATABASE_BACKEND` | `influxdb` | `postgres` to use this backend |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `localhost` / `5432` | |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `garmin` / (empty) | |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `garmin` / (empty) | the user needs to create tables |
 | `POSTGRES_DATABASE` | `garmin_stats` | must exist |
 | `POSTGRES_SSLMODE` | `prefer` | libpq sslmode |
 | `POSTGRES_TIMESCALE` | `false` | use hypertables |
 
-##### Moving an existing InfluxDB 1.x database
+##### Moving an existing InfluxDB database
 
-`influxdb_to_postgres.py` copies every measurement through the same backend, using the usual
-`INFLUXDB_*` and `POSTGRES_*` variables. It's safe to run again (points are upserted). With
-`--verify` it compares the number of values in every field afterwards.
+`influxdb_to_postgres.py` copies every measurement through the same backend, so the tables come out
+exactly as the fetcher creates them.
+- **Settings:** it uses your usual `INFLUXDB_*` variables (InfluxDB 1.x, or 3.x with
+  `INFLUXDB_VERSION=3` and `INFLUXDB_V3_ACCESS_TOKEN`) and the `POSTGRES_*` ones.
+- **Reruns:** it's safe to run again, because points are upserted.
+- **`--verify`:** compares the number of values in every field afterwards.
+
+With both databases in your compose file and the `POSTGRES_*` variables set on `garmin-fetch-data`:
 
 ```
-docker compose run --rm -e DATABASE_BACKEND=postgres garmin-fetch-data python /app/garmin_grafana/influxdb_to_postgres.py --verify
+docker compose stop garmin-fetch-data
+docker compose run --rm garmin-fetch-data python /app/garmin_grafana/influxdb_to_postgres.py --verify
 ```
+
+Then switch `garmin-fetch-data` to `DATABASE_BACKEND=postgres`, start it, and remove InfluxDB once
+you're happy.
+
+##### CSV export
+
+`influxdb_exporter.py` (see the README's export section) also reads PostgreSQL when
+`DATABASE_BACKEND=postgres`. It produces the same files, column for column.
 
 ##### Dashboards
 
-`Grafana_Dashboard/convert_to_postgres.py` generates `*-Postgres.json` versions of the dashboards for
-Grafana's PostgreSQL data source:
+`Grafana_Postgres/convert_to_postgres.py` regenerates the PostgreSQL dashboards from the InfluxDB
+ones, so a change to a dashboard only needs a rerun:
 
 - **Query-builder panels** are translated mechanically.
-- **Hand-written InfluxQL** has translations in the script: `RAW` keyed by query text, and
-  `RAW_BY_PANEL` for the Strength Training dashboard.
+- **Hand-written InfluxQL** has translations in `RAW` (by query text) and `RAW_BY_PANEL`
+  (by panel and query).
 - **Series names** stay InfluxDB's (target aliases, `measurement.mean`, `$tag_…` names), so panel
   overrides and transformations keep working.
 - **Time zones:** `tz('$TimeZone')` queries are grouped in that time zone with `date_bin`.
 - **Data source pickers and import inputs** are switched to PostgreSQL.
 
+It also rewrites `postgres_dashboard_tables.json`.
+
 ```
-python Grafana_Dashboard/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
+python Grafana_Postgres/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
 ```
 
-##### What was tested (proof of concept)
+##### How it was tested
 
 Against a copy of a real database: 17 measurements, about 1.06 million points, 10 months (Dec 2025 – Oct 2026).
 
-- **Migration:** every field's value count matched, and the sum, min and max of all 139 fields
-  (and the latest value of text fields) were identical. It took 49 seconds. A second run changed
-  nothing.
+- **Migration from InfluxDB 1.x:** every field's value count matched, and the sum, min and max of
+  all 139 fields (and the latest value of text fields) were identical. It took 49 seconds, and a
+  second run changed nothing.
+- **Migration from InfluxDB 3.x (3.11.7 Core):** the same data loaded through `InfluxDBClient3`,
+  then migrated. All 218 columns in 18 tables came out identical to the 1.x migration.
 - **Fetcher:** imported with `DATABASE_BACKEND=postgres` (the real startup path, including its
-  connection-test point). Then, through `write_points_to_influxdb()`:
+  connection-test point and table creation). Then, through `write_points_to_influxdb()`:
   - a re-write overwrites only the fields given
   - naive and ISO `Z` times land on the same UTC point
   - a new tag (`User_ID`) starts a separate series
@@ -73,21 +106,23 @@ Against a copy of a real database: 17 measurements, about 1.06 million points, 1
   - a wrong-type value is skipped and the rest of the point kept
   - the strength-set purge removes only its activity
   - the last-sync lookup works
-  - empty dashboard tables take the type of their first real value
+  - an empty pre-created column takes its first value's type
 - **Main dashboard:** all 142 panel queries were run through Grafana 13.2.5 against both databases
   over the last 30 and 365 days. 134 returned identical values and series names, 8 were empty in
-  both, and 0 failed. They also render identically.
+  both, and none failed. They render identically.
 - **Strength Training dashboard:** realistic workouts (790 sets, 240 HR-zone points, written as the
   fetcher's own points to both databases), all 21 queries compared. The cases: every category and
   a single category, over 7, 30, 120 and 400 days, plus a window with no workouts. Every query
   returned identical values, text and series names, and in the empty window all were empty in
   both. It renders as shipped, with its data source picker selecting PostgreSQL.
+- **CSV export:** a year exported from both databases. All 17 CSVs were identical.
 - **Storage:** plain PostgreSQL 148 MB, TimescaleDB 190 MB, InfluxDB 54 MB (InfluxDB compresses;
   TimescaleDB's compression is under its non-OSI license).
 
-##### Not done yet
+##### Limitations
 
-- The "Battery Level" panel queries `"%"` (a GarminHomeAssistant placeholder) and is left disabled.
-- `influxdb_exporter.py` (CSV export) still reads InfluxDB only.
-- No InfluxDB 3 → PostgreSQL migration (InfluxDB 3 speaks InfluxQL, so it may only need its client).
-- Not yet run as a live, long-running fetcher against Garmin.
+- The "Battery Level" panel queries `"%"` (a GarminHomeAssistant placeholder) and is disabled in the
+  PostgreSQL dashboard.
+- The Kubernetes chart (`k8s/`) still deploys InfluxDB only.
+- The fetcher writes its connection-test `DemoPoint` with the current time on every start. With either
+  database they pile up: about 336k points (32 MB) in the database this was tested on.

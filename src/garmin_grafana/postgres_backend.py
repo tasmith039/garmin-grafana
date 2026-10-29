@@ -161,6 +161,13 @@ class PostgresClient:
         for table, cols in schema.items():
             self._ensure(table, dict.fromkeys(cols.get("tags", []), ""), dict.fromkeys(cols.get("fields", []), 0.0))
 
+    def schema(self, measurement):
+        """(tag columns, field columns) of a measurement's table; both empty if it doesn't exist."""
+        if measurement not in self.columns:
+            self._load(measurement)
+        tags = list(self.tags[measurement])
+        return tags, [c for c in self.columns[measurement] if c != "time" and c not in tags]
+
     def last_time(self, measurement):
         """Newest point's time in a measurement, or None."""
         try:
