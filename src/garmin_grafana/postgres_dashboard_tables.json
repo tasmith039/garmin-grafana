@@ -1,0 +1,144 @@
+{
+ "ActivityGPS": {
+  "tags": [
+   "ActivitySelector"
+  ],
+  "fields": [
+   "Altitude",
+   "Cadence",
+   "Distance",
+   "DurationSeconds",
+   "HeartRate",
+   "Latitude",
+   "Longitude",
+   "Speed"
+  ]
+ },
+ "ActivitySummary": {
+  "tags": [
+   "activityType"
+  ],
+  "fields": [
+   "averageHR",
+   "bmrCalories",
+   "calories",
+   "distance",
+   "elapsedDuration",
+   "hrTimeInZone_1",
+   "hrTimeInZone_2",
+   "hrTimeInZone_3",
+   "hrTimeInZone_4",
+   "hrTimeInZone_5",
+   "locationName",
+   "maxHR",
+   "maxSpeed"
+  ]
+ },
+ "BodyBatteryIntraday": {
+  "tags": [],
+  "fields": [
+   "BodyBatteryLevel"
+  ]
+ },
+ "BodyComposition": {
+  "tags": [],
+  "fields": [
+   "weight"
+  ]
+ },
+ "BreathingRateIntraday": {
+  "tags": [],
+  "fields": [
+   "BreathingRate"
+  ]
+ },
+ "DailyStats": {
+  "tags": [],
+  "fields": [
+   "activeKilocalories",
+   "activeSeconds",
+   "averageSpo2",
+   "bmrKilocalories",
+   "bodyBatteryChargedValue",
+   "bodyBatteryDrainedValue",
+   "bodyBatteryHighestValue",
+   "bodyBatteryLowestValue",
+   "highStressDuration",
+   "highlyActiveSeconds",
+   "lowStressDuration",
+   "maxHeartRate",
+   "mediumStressDuration",
+   "minHeartRate",
+   "moderateIntensityMinutes",
+   "restStressDuration",
+   "restingHeartRate",
+   "sedentarySeconds",
+   "sleepingSeconds",
+   "totalDistanceMeters",
+   "totalSteps",
+   "uncategorizedStressDuration",
+   "vigorousIntensityMinutes"
+  ]
+ },
+ "HRV_Intraday": {
+  "tags": [],
+  "fields": [
+   "hrvValue"
+  ]
+ },
+ "HeartRateIntraday": {
+  "tags": [],
+  "fields": [
+   "HeartRate"
+  ]
+ },
+ "RacePredictions": {
+  "tags": [],
+  "fields": [
+   "time10K",
+   "time5K",
+   "timeHalfMarathon",
+   "timeMarathon"
+  ]
+ },
+ "SleepIntraday": {
+  "tags": [],
+  "fields": [
+   "SleepMovementActivityLevel",
+   "SleepStageLevel",
+   "heartRate",
+   "spo2Reading"
+  ]
+ },
+ "SleepSummary": {
+  "tags": [],
+  "fields": [
+   "averageSpO2Value",
+   "avgSleepStress",
+   "awakeSleepSeconds",
+   "deepSleepSeconds",
+   "lightSleepSeconds",
+   "remSleepSeconds",
+   "sleepScore",
+   "sleepTimeSeconds"
+  ]
+ },
+ "StepsIntraday": {
+  "tags": [],
+  "fields": [
+   "StepsCount"
+  ]
+ },
+ "StressIntraday": {
+  "tags": [],
+  "fields": [
+   "stressLevel"
+  ]
+ },
+ "VO2_Max": {
+  "tags": [],
+  "fields": [
+   "VO2_max_value"
+  ]
+ }
+}
