@@ -18,6 +18,7 @@ With POSTGRES_TIMESCALE=true and the timescaledb extension available, new tables
 import logging
 import re
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import psycopg
@@ -62,6 +63,17 @@ class PostgresClient:
             logging.warning("Lost the PostgreSQL connection, reconnecting")
             self._connect()  # also forgets the cached schema, in case a change didn't finish
             return fn(*args)
+
+    @contextmanager
+    def _schema_transaction(self):
+        """Commit schema and data together, and forget schema changes if they roll back."""
+        try:
+            with self.conn.transaction():
+                yield
+        except Exception:
+            self.columns.clear()
+            self.tags.clear()
+            raise
 
     # ------------------------------------------------------------------ schema
 
@@ -146,21 +158,28 @@ class PostgresClient:
         return self._retry(self._write_points, points)
 
     def _write_points(self, points):
-        batches = defaultdict(list)
-        for p in points:
-            table = p["measurement"]
-            tags = {k: str(v) for k, v in (p.get("tags") or {}).items() if v is not None}
-            fields = {k: v for k, v in (p.get("fields") or {}).items() if v is not None}
-            self._ensure(table, tags, fields)
-            for name, value in list(fields.items()):
-                if not self._fits(table, name, value):
-                    logging.warning(f"Skipping {table}.{name}={value!r}: column is {self.columns[table][name]}")
-                    del fields[name]
-            if not fields:
-                continue
-            batches[(table, tuple(sorted(fields)))].append((_as_time(p["time"]), tags, fields))
-        with self.conn.transaction():
-            for (table, names), rows in batches.items():
+        with self._schema_transaction():
+            # Points are grouped by field set, in rounds: a point written again later in the same batch
+            # goes into a later round, so the rounds run in order and the latest update wins.
+            rounds, last_round = [], {}
+            for p in points:
+                table = p["measurement"]
+                tags = {k: str(v) for k, v in (p.get("tags") or {}).items() if v is not None}
+                fields = {k: v for k, v in (p.get("fields") or {}).items() if v is not None}
+                self._ensure(table, tags, fields)
+                for name, value in list(fields.items()):
+                    if not self._fits(table, name, value):
+                        logging.warning(f"Skipping {table}.{name}={value!r}: column is {self.columns[table][name]}")
+                        del fields[name]
+                if not fields:
+                    continue
+                time = _as_time(p["time"])
+                point = (table, time, tuple(sorted((k, v) for k, v in tags.items() if v != "")))
+                n = last_round[point] = last_round.get(point, -1) + 1
+                if n == len(rounds):
+                    rounds.append(defaultdict(list))
+                rounds[n][(table, tuple(sorted(fields)))].append((time, tags, fields))
+            for (table, names), rows in (batch for groups in rounds for batch in groups.items()):
                 key = ["time", *self.tags[table]]
                 cols = key + list(names)
                 stmt = sql.SQL("INSERT INTO {t} ({c}) VALUES ({v}) ON CONFLICT ({k}) DO UPDATE SET {u}").format(
@@ -182,8 +201,9 @@ class PostgresClient:
         self._retry(self._ensure_tables, schema)
 
     def _ensure_tables(self, schema):
-        for table, cols in schema.items():
-            self._ensure(table, dict.fromkeys(cols.get("tags", []), ""), dict.fromkeys(cols.get("fields", []), 0.0))
+        with self._schema_transaction():
+            for table, cols in schema.items():
+                self._ensure(table, dict.fromkeys(cols.get("tags", []), ""), dict.fromkeys(cols.get("fields", []), 0.0))
 
     def schema(self, measurement):
         """(tag columns, field columns) of a measurement's table; both empty if it doesn't exist."""

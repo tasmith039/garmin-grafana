@@ -19,6 +19,7 @@ import unittest
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(SRC))
@@ -90,6 +91,19 @@ class PostgresTestCase(unittest.TestCase):
     def rows(self, client, sql):
         return client.conn.execute(sql).fetchall()
 
+    def disconnect_after_statement(self, client, prefix):
+        """Drop the real connection at a chosen DDL boundary, before the next statement."""
+        execute = client.conn.execute
+
+        def execute_and_disconnect(query, *args, **kwargs):
+            statement = query if isinstance(query, str) else query.as_string(client.conn)
+            result = execute(query, *args, **kwargs)
+            if statement.startswith(prefix):
+                self.kill_connection(client)
+            return result
+
+        return patch.object(client.conn, "execute", side_effect=execute_and_disconnect)
+
 
 class Backend(PostgresTestCase):
     T = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
@@ -99,6 +113,27 @@ class Backend(PostgresTestCase):
         c.write_points([{"measurement": "Rewrite", "time": self.T, "tags": {"Device": "w"}, "fields": {"a": 1, "b": 2}}])
         c.write_points([{"measurement": "Rewrite", "time": self.T, "tags": {"Device": "w"}, "fields": {"b": 3}}])
         self.assertEqual(self.rows(c, 'SELECT a, b FROM "Rewrite"'), [(1, 3)])
+
+    def test_rewrite_preserves_order_across_field_groups(self):
+        c = self.client()
+        c.write_points([
+            {"measurement": "OrderedRewrite", "time": self.T, "tags": {"Device": "w"}, "fields": fields}
+            for fields in ({"a": 1}, {"a": 2, "b": 2}, {"a": 3})
+        ])
+        self.assertEqual(self.rows(c, 'SELECT a, b FROM "OrderedRewrite"'), [(3, 2)])
+
+    def test_rewrite_order_with_repeats_and_other_points(self):
+        c = self.client()
+        later = "2026-01-02T03:04:06Z"
+        c.write_points([
+            {"measurement": "Repeats", "time": self.T, "tags": {"Device": "w"}, "fields": {"a": 1}},
+            {"measurement": "Repeats", "time": later, "tags": {"Device": "w"}, "fields": {"a": 10, "b": 10}},
+            {"measurement": "Repeats", "time": self.T, "tags": {"Device": "w", "User_ID": ""}, "fields": {"a": 2, "b": 2}},
+            {"measurement": "Repeats", "time": self.T, "tags": {"Device": "w"}, "fields": {"a": 3}},
+            {"measurement": "Repeats", "time": "2026-01-02T03:04:05Z", "tags": {"Device": "w"}, "fields": {"a": 4}},
+            {"measurement": "Repeats", "time": later, "tags": {"Device": "w"}, "fields": {"a": 11}},
+        ])
+        self.assertEqual(self.rows(c, 'SELECT a, b FROM "Repeats" ORDER BY time'), [(4, 2), (11, 10)])
 
     def test_missing_field_values_are_left_out(self):
         c = self.client()
@@ -177,6 +212,43 @@ class Backend(PostgresTestCase):
         self.assertEqual(self.rows(c, 'SELECT count(*) FROM "Reconnect"'), [(2,)])
         self.kill_connection(c)
         self.assertEqual(c.last_time("Reconnect"), datetime(2026, 1, 3, tzinfo=timezone.utc))
+
+    def test_reconnects_during_table_creation(self):
+        c = self.client()
+        point = {"measurement": "CreateReconnect", "time": self.T, "tags": {}, "fields": {"x": 1}}
+        with self.disconnect_after_statement(c, "CREATE TABLE"), self.assertLogs(level="WARNING"):
+            c.write_points([point])
+        c.write_points([{**point, "fields": {"x": 2}}])
+        self.assertEqual(self.rows(c, 'SELECT x FROM "CreateReconnect"'), [(2,)])
+
+    def test_startup_reconnects_during_table_creation(self):
+        c = self.client()
+        with self.disconnect_after_statement(c, "CREATE TABLE"), self.assertLogs(level="WARNING"):
+            c.ensure_tables({"StartupReconnect": {"tags": [], "fields": ["x"]}})
+        c.write_points([{"measurement": "StartupReconnect", "time": self.T, "tags": {}, "fields": {"x": 1}}])
+        self.assertEqual(self.rows(c, 'SELECT x FROM "StartupReconnect"'), [(1,)])
+
+    def test_reconnects_while_replacing_the_series_index(self):
+        c = self.client()
+        point = {"measurement": "IndexReconnect", "time": self.T, "tags": {"Device": "w"}, "fields": {"x": 1}}
+        c.write_points([point])
+        with self.disconnect_after_statement(c, "DROP INDEX"), self.assertLogs(level="WARNING"):
+            c.write_points([{**point, "tags": {"Device": "w", "User_ID": "u"}, "fields": {"x": 2}}])
+        self.assertEqual(sorted(self.rows(c, 'SELECT "User_ID", x FROM "IndexReconnect"')), [("", 1), ("u", 2)])
+
+    def test_failed_write_rolls_back_schema_data_and_cached_schema(self):
+        c = self.client()
+        point = {"measurement": "RollbackExisting", "time": self.T, "tags": {}, "fields": {"x": 1}}
+        c.write_points([point])
+        with self.assertRaises(self.psycopg.errors.NumericValueOutOfRange):
+            c.write_points([
+                {**point, "fields": {"x": 2}},
+                {**point, "measurement": "RollbackNew", "fields": {"x": 2**100}},
+            ])
+        self.assertEqual(self.rows(c, 'SELECT x FROM "RollbackExisting"'), [(1,)])
+        self.assertEqual(self.rows(c, "SELECT to_regclass('\"RollbackNew\"')"), [(None,)])
+        c.write_points([{**point, "measurement": "RollbackNew", "fields": {"x": 3}}])
+        self.assertEqual(self.rows(c, 'SELECT x FROM "RollbackNew"'), [(3,)])
 
 
 class FakeGarmin:
