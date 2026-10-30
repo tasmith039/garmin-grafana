@@ -192,7 +192,7 @@ This project is made for InfluxDB 1.11, as Flux queries on influxDB 2.x can be p
 
 ### Using PostgreSQL instead of InfluxDB
 
-You can store the data in PostgreSQL (or TimescaleDB) instead of InfluxDB. Set `DATABASE_BACKEND=postgres` and use [compose-example-postgres.yml](./compose-example-postgres.yml) and the dashboards in `Grafana_Postgres/`. The dashboards show the same panels and numbers. An existing InfluxDB 1.x or 3.x database can be copied over with one command. See [docs/postgres-backend.md](docs/postgres-backend.md) for setup, migration and details.
+You can store the data in PostgreSQL (or TimescaleDB) instead of InfluxDB. The compose example has the PostgreSQL options commented out (marked `(PostgreSQL)`): uncomment them and comment out the InfluxDB lines they replace. Grafana then provisions the dashboards in `Grafana_Postgres/`. The dashboards show the same panels and numbers. An existing InfluxDB 1.x or 3.x database can be copied over with one command. See [docs/postgres-backend.md](docs/postgres-backend.md) for setup, migration and details.
 
 ### Additional configuration and environment variables
 

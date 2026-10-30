@@ -26,6 +26,34 @@ from psycopg import sql
 
 TYPES = {bool: "boolean", int: "bigint", float: "double precision", str: "text"}
 
+# The tables and columns the PostgreSQL dashboards query (Grafana_Postgres/convert_to_postgres.py checks this
+# still covers them). ensure_tables() creates them at startup: {measurement: (tags, fields)}; fields are numbers
+# unless marked :text.
+DASHBOARD_TABLES = {
+    "ActivityGPS": ("ActivitySelector", "Altitude Cadence Distance DurationSeconds HeartRate Latitude Longitude Speed"),
+    "ActivitySummary": ("", "activityType:text averageHR bmrCalories calories distance elapsedDuration hrTimeInZone_1 "
+                            "hrTimeInZone_2 hrTimeInZone_3 hrTimeInZone_4 hrTimeInZone_5 locationName:text maxHR maxSpeed"),
+    "BodyBatteryIntraday": ("", "BodyBatteryLevel"),
+    "BodyComposition": ("", "weight"),
+    "BreathingRateIntraday": ("", "BreathingRate"),
+    "DailyStats": ("", "activeKilocalories activeSeconds averageSpo2 bmrKilocalories bodyBatteryChargedValue "
+                       "bodyBatteryDrainedValue bodyBatteryHighestValue bodyBatteryLowestValue highStressDuration "
+                       "highlyActiveSeconds lowStressDuration maxHeartRate mediumStressDuration minHeartRate "
+                       "moderateIntensityMinutes restStressDuration restingHeartRate sedentarySeconds sleepingSeconds "
+                       "totalDistanceMeters totalSteps uncategorizedStressDuration vigorousIntensityMinutes"),
+    "HRV_Intraday": ("", "hrvValue"),
+    "HeartRateIntraday": ("", "HeartRate"),
+    "RacePredictions": ("", "time10K time5K timeHalfMarathon timeMarathon"),
+    "SleepIntraday": ("", "SleepMovementActivityLevel SleepStageLevel heartRate spo2Reading"),
+    "SleepSummary": ("", "averageSpO2Value avgSleepStress awakeSleepSeconds deepSleepSeconds lightSleepSeconds "
+                         "remSleepSeconds sleepScore sleepTimeSeconds"),
+    "StepsIntraday": ("", "StepsCount"),
+    "StrengthExerciseSet": ("ExerciseCategory ExerciseLabel", "Duration_s Reps SetOrder Weight_kg"),
+    "StrengthHRZones": ("", "SecsInZone ZoneNumber"),
+    "StressIntraday": ("", "stressLevel"),
+    "VO2_Max": ("", "VO2_max_value"),
+}
+
 
 def _pg_type(value):
     return TYPES.get(type(value), "text")
@@ -193,17 +221,19 @@ class PostgresClient:
                                            for t, tg, f in rows])
         return True
 
-    def ensure_tables(self, schema):
+    def ensure_tables(self, schema=DASHBOARD_TABLES):
         """Create the tables (and columns) the dashboards query before any data arrives, so panels for
         data an account doesn't have show "No data" instead of a "relation does not exist" error.
-        schema: {measurement: {"tags": [names], "fields": [names]}} (postgres_dashboard_tables.json).
-        Fields start as double precision; the first real value written retypes an empty column."""
+        schema: {measurement: (tags, fields)}, space-separated names, like DASHBOARD_TABLES.
+        Fields start as double precision (text if marked :text); the first real value written retypes an
+        empty number column."""
         self._retry(self._ensure_tables, schema)
 
     def _ensure_tables(self, schema):
         with self._schema_transaction():
-            for table, cols in schema.items():
-                self._ensure(table, dict.fromkeys(cols.get("tags", []), ""), dict.fromkeys(cols.get("fields", []), 0.0))
+            for table, (tags, fields) in schema.items():
+                self._ensure(table, dict.fromkeys(tags.split(), ""),
+                             {name: "" if kind == "text" else 0.0 for name, _, kind in (f.partition(":") for f in fields.split())})
 
     def schema(self, measurement):
         """(tag columns, field columns) of a measurement's table; both empty if it doesn't exist."""

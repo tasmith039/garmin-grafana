@@ -3,7 +3,8 @@
   python Grafana_Postgres/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
 
 Writes Grafana_Postgres/dashboards/<name>-Postgres.json (kept out of Grafana_Dashboard/, which InfluxDB
-installs provision wholesale), and src/garmin_grafana/postgres_dashboard_tables.json. Query-builder targets (the structured InfluxQL ones) are
+installs provision wholesale), and checks that DASHBOARD_TABLES in src/garmin_grafana/postgres_backend.py
+lists every table and column they query. Query-builder targets (the structured InfluxQL ones) are
 translated mechanically to Grafana's PostgreSQL macros; raw InfluxQL targets come from RAW below,
 and any raw query without a translation is reported and left disabled in the output.
 
@@ -300,8 +301,15 @@ if __name__ == "__main__":
     for name, cols in RAW_TABLES.items():
         t = tables.setdefault(name, {"tags": set(), "fields": set()})
         t["tags"] |= set(cols["tags"]); t["fields"] |= set(cols["fields"])
-    # The tables the fetcher creates at startup with the postgres backend (PostgresClient.ensure_tables).
-    out = Path(__file__).resolve().parent.parent / "src" / "garmin_grafana" / "postgres_dashboard_tables.json"
-    out.write_text(json.dumps({k: {"tags": sorted(v["tags"]), "fields": sorted(v["fields"] - v["tags"])}
-                               for k, v in sorted(tables.items())}, indent=1) + "\n")
-    print(f"{out}: {len(tables)} tables")
+    # The fetcher creates these tables at startup (PostgresClient.ensure_tables), so DASHBOARD_TABLES
+    # must list every table and column the dashboards query.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "garmin_grafana"))
+    from postgres_backend import DASHBOARD_TABLES
+    listed = {k: (set(t.split()), {c.partition(":")[0] for c in f.split()}) for k, (t, f) in DASHBOARD_TABLES.items()}
+    absent = [f"{k}: tags {sorted(v['tags'] - listed.get(k, (set(), set()))[0])}, "
+              f"fields {sorted(v['fields'] - v['tags'] - listed.get(k, (set(), set()))[1])}"
+              for k, v in sorted(tables.items())
+              if v["tags"] - listed.get(k, (set(), set()))[0] or v["fields"] - v["tags"] - listed.get(k, (set(), set()))[1]]
+    if absent:
+        sys.exit("Add these to DASHBOARD_TABLES in src/garmin_grafana/postgres_backend.py:\n  " + "\n  ".join(absent))
+    print(f"DASHBOARD_TABLES covers all {len(tables)} tables the dashboards query")

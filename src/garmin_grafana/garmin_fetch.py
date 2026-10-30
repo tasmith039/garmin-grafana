@@ -1,7 +1,7 @@
 # %%
 import traceback
 import re
-import base64, requests, time, pytz, logging, os, sys, dotenv, io, zipfile, json
+import base64, requests, time, pytz, logging, os, sys, dotenv, io, zipfile
 from fitparse import FitFile, FitParseError
 from datetime import datetime, timedelta
 from influxdb import InfluxDBClient
@@ -108,9 +108,7 @@ try:
     if DATABASE_BACKEND == 'postgres':
         influxdbclient = PostgresClient(host=POSTGRES_HOST, port=POSTGRES_PORT, user=POSTGRES_USER, password=POSTGRES_PASSWORD,
                                         database=POSTGRES_DATABASE, sslmode=POSTGRES_SSLMODE, timescale=POSTGRES_TIMESCALE)
-        # Tables the dashboards query, so panels for data this account doesn't have show "No data", not an error
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "postgres_dashboard_tables.json")) as f:
-            influxdbclient.ensure_tables(json.load(f))
+        influxdbclient.ensure_tables() # Tables the dashboards query, so panels for data this account doesn't have show "No data", not an error
     elif INFLUXDB_ENDPOINT_IS_HTTP:
         if INFLUXDB_VERSION == '1':
             influxdbclient = InfluxDBClient(host=INFLUXDB_HOST, port=INFLUXDB_PORT, username=INFLUXDB_USERNAME, password=INFLUXDB_PASSWORD)

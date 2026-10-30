@@ -18,7 +18,7 @@ so the rest of the project works unchanged. This is the wrapper idea from
 - **Field types:** integer columns widen to double precision when a decimal arrives. A value that
   can't be stored in a column's type is skipped with a warning, the way InfluxDB rejects it.
 - **Tables before data:** at startup the fetcher creates the tables the dashboards query
-  (`postgres_dashboard_tables.json`), so panels for data an account doesn't have show "No data"
+  (`DASHBOARD_TABLES` in `postgres_backend.py`), so panels for data an account doesn't have show "No data"
   rather than an error. A column with no values yet takes the type of the first value written.
 - **Lost connections:** if the database restarts or drops the connection, the next write reconnects
   and retries. If a write still fails, the fetcher fetches the same dates again on its next update
@@ -30,10 +30,14 @@ so the rest of the project works unchanged. This is the wrapper idea from
 
 Follow the README's manual install with two changes:
 
-1. Use [compose-example-postgres.yml](../compose-example-postgres.yml) as your `compose.yml`. It builds
-   `garmin-fetch-data` from your checkout until a published image includes this backend, so in step 4
-   run `docker compose build` instead of `docker pull`, and to update later run `git pull` and
-   `docker compose build` before `docker compose up -d`.
+1. In your `compose.yml` (from [compose-example.yml](../compose-example.yml)), uncomment every line
+   marked `(PostgreSQL)` and comment out the InfluxDB lines they replace:
+   - `garmin-fetch-data`: `depends_on` `postgres` instead of `influxdb`, and the `DATABASE_BACKEND` and
+     `POSTGRES_*` variables
+   - the `postgres` service instead of the `influxdb` service
+   - `grafana`: the two `./Grafana_Postgres/...` provisioning mounts instead of `./Grafana_Datasource`
+     and `./Grafana_Dashboard`
+   - `volumes`: `postgres_data`
 2. For step 5, Grafana self-provisioning, run:
 
 ```
@@ -69,8 +73,12 @@ docker compose stop garmin-fetch-data
 docker compose run --rm garmin-fetch-data python /app/garmin_grafana/influxdb_to_postgres.py --verify
 ```
 
-Then switch `garmin-fetch-data` to `DATABASE_BACKEND=postgres`, start it, and remove InfluxDB once
-you're happy.
+Then switch `garmin-fetch-data` to `DATABASE_BACKEND=postgres` and Grafana to the
+`Grafana_Postgres/` provisioning mounts, recreate the containers (`docker compose up -d`), and remove
+InfluxDB once you're happy.
+
+An existing install switched without migrating starts with an empty PostgreSQL database; the data
+stays in InfluxDB.
 
 ##### CSV export
 
@@ -90,26 +98,12 @@ ones, so a change to a dashboard only needs a rerun:
 - **Time zones:** `tz('$TimeZone')` queries are grouped in that time zone with `date_bin`.
 - **Data source pickers and import inputs** are switched to PostgreSQL.
 
-It also rewrites `postgres_dashboard_tables.json`.
+It also checks that `DASHBOARD_TABLES` in `postgres_backend.py` lists every table and column the
+dashboards query, and names any that are missing.
 
 ```
-python Grafana_Postgres/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
+uv run python Grafana_Postgres/convert_to_postgres.py Grafana_Dashboard/Garmin-Grafana-Dashboard.json Grafana_Dashboard/Garmin-Strength-Training-Dashboard.json
 ```
-
-##### Tests
-
-`tests/test_postgres_backend.py` runs the backend and the fetcher itself (`garmin_fetch.py` imported
-with `DATABASE_BACKEND=postgres`, its own point builders fed made-up Garmin responses) against a
-disposable PostgreSQL. Each run creates its own database and drops it afterwards:
-
-```
-docker run -d --rm --name garmin-pg-test -e POSTGRES_PASSWORD=test -p 55432:5432 postgres:17
-POSTGRES_TEST_PORT=55432 POSTGRES_TEST_PASSWORD=test uv run python -m unittest discover -s tests -v
-docker stop garmin-pg-test
-```
-
-It also checks that every column the startup schema makes a tag is a tag in `garmin_fetch.py`.
-Rerun it after changing the fetcher's points or regenerating the dashboards.
 
 ##### How it was tested
 
@@ -120,8 +114,9 @@ Against a copy of a real database: 17 measurements, about 1.06 million points, 1
   second run changed nothing.
 - **Migration from InfluxDB 3.x (3.11.7 Core):** the same data loaded through `InfluxDBClient3`,
   then migrated. All 218 columns in 18 tables came out identical to the 1.x migration.
-- **Fetcher:** see Tests above. It covers the real startup path (connection-test point and table
-  creation), then writes through `write_points_to_influxdb()`:
+- **Fetcher:** `garmin_fetch.py` imported with `DATABASE_BACKEND=postgres` against a disposable
+  PostgreSQL, its own point builders fed made-up Garmin responses. That covered the real startup path
+  (connection-test point and table creation), then writes through `write_points_to_influxdb()`:
   - a re-write overwrites only the fields given
   - naive and ISO `Z` times land on the same UTC point
   - a new tag (`User_ID`) starts a separate series
