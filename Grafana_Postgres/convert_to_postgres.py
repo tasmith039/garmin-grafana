@@ -21,7 +21,10 @@ DATASOURCE = {"type": "grafana-postgresql-datasource", "uid": "${DS_GARMIN_STATS
 AGGREGATES = {
     "mean": 'avg({})', "sum": 'sum({})', "max": 'max({})', "min": 'min({})', "count": 'count({})',
     "median": 'percentile_cont(0.5) WITHIN GROUP (ORDER BY {})', "spread": '(max({0}) - min({0}))',
-    "stddev": 'stddev({})', "last": '(array_agg({} ORDER BY time DESC))[1]', "first": '(array_agg({} ORDER BY time))[1]',
+    "stddev": 'stddev({})',
+    # InfluxDB's last()/first() only see points that have the field
+    "last": '(array_agg({0} ORDER BY time DESC) FILTER (WHERE {0} IS NOT NULL))[1]',
+    "first": '(array_agg({0} ORDER BY time) FILTER (WHERE {0} IS NOT NULL))[1]',
 }
 
 # Hand translations of the raw InfluxQL targets, by their exact query text.

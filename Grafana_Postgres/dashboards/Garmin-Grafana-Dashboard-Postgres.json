@@ -384,7 +384,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT max(time) AS \"time\", (array_agg(\"HeartRate\" ORDER BY time DESC))[1] AS \"HeartRateIntraday.last\" FROM \"HeartRateIntraday\" WHERE $__timeFilter(time)"
+          "rawSql": "SELECT max(time) AS \"time\", (array_agg(\"HeartRate\" ORDER BY time DESC) FILTER (WHERE \"HeartRate\" IS NOT NULL))[1] AS \"HeartRateIntraday.last\" FROM \"HeartRateIntraday\" WHERE $__timeFilter(time)"
         }
       ],
       "timeFrom": "24h",
@@ -796,7 +796,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"restingHeartRate\" ORDER BY time DESC))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"restingHeartRate\" ORDER BY time DESC) FILTER (WHERE \"restingHeartRate\" IS NOT NULL))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Today RHR",
@@ -882,7 +882,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"totalSteps\" ORDER BY time DESC))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"totalSteps\" ORDER BY time DESC) FILTER (WHERE \"totalSteps\" IS NOT NULL))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Today's Steps",
@@ -1121,7 +1121,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"averageSpo2\" ORDER BY time DESC))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"averageSpo2\" ORDER BY time DESC) FILTER (WHERE \"averageSpo2\" IS NOT NULL))[1] AS \"DailyStats.last\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "Today SpO2",
@@ -1289,7 +1289,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sleepTimeSeconds\" ORDER BY time DESC))[1] AS \"Total Asleep\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sleepTimeSeconds\" ORDER BY time DESC) FILTER (WHERE \"sleepTimeSeconds\" IS NOT NULL))[1] AS \"Total Asleep\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "timeFrom": "24h",
@@ -1540,7 +1540,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"highStressDuration\" ORDER BY time DESC))[1] AS \"Stress\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"highStressDuration\" ORDER BY time DESC) FILTER (WHERE \"highStressDuration\" IS NOT NULL))[1] AS \"Stress\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "title": "High Stress Duration",
@@ -1792,7 +1792,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"deepSleepSeconds\" ORDER BY time DESC))[1] AS \"Deep\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"deepSleepSeconds\" ORDER BY time DESC) FILTER (WHERE \"deepSleepSeconds\" IS NOT NULL))[1] AS \"Deep\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "B",
@@ -1803,7 +1803,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"lightSleepSeconds\" ORDER BY time DESC))[1] AS \"Light\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"lightSleepSeconds\" ORDER BY time DESC) FILTER (WHERE \"lightSleepSeconds\" IS NOT NULL))[1] AS \"Light\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "C",
@@ -1814,7 +1814,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"remSleepSeconds\" ORDER BY time DESC))[1] AS \"REM\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"remSleepSeconds\" ORDER BY time DESC) FILTER (WHERE \"remSleepSeconds\" IS NOT NULL))[1] AS \"REM\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "D",
@@ -1825,7 +1825,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"awakeSleepSeconds\" ORDER BY time DESC))[1] AS \"Awake\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"awakeSleepSeconds\" ORDER BY time DESC) FILTER (WHERE \"awakeSleepSeconds\" IS NOT NULL))[1] AS \"Awake\" FROM \"SleepSummary\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "timeFrom": "24h",
@@ -2240,7 +2240,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sedentarySeconds\" ORDER BY time DESC))[1] AS \"Sedentary\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sedentarySeconds\" ORDER BY time DESC) FILTER (WHERE \"sedentarySeconds\" IS NOT NULL))[1] AS \"Sedentary\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "B",
@@ -2251,7 +2251,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", ((array_agg(\"vigorousIntensityMinutes\" ORDER BY time DESC))[1]) * 60 AS \"Intense Activity\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", ((array_agg(\"vigorousIntensityMinutes\" ORDER BY time DESC) FILTER (WHERE \"vigorousIntensityMinutes\" IS NOT NULL))[1]) * 60 AS \"Intense Activity\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "C",
@@ -2262,7 +2262,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", ((array_agg(\"moderateIntensityMinutes\" ORDER BY time DESC))[1]) * 60 AS \"Moderate Activity\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", ((array_agg(\"moderateIntensityMinutes\" ORDER BY time DESC) FILTER (WHERE \"moderateIntensityMinutes\" IS NOT NULL))[1]) * 60 AS \"Moderate Activity\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         },
         {
           "refId": "D",
@@ -2273,7 +2273,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sleepingSeconds\" ORDER BY time DESC))[1] AS \"Sleeping\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT (date_bin('1d'::interval, time AT TIME ZONE '$TimeZone', TIMESTAMP '1970-01-01') AT TIME ZONE '$TimeZone') AS \"time\", (array_agg(\"sleepingSeconds\" ORDER BY time DESC) FILTER (WHERE \"sleepingSeconds\" IS NOT NULL))[1] AS \"Sleeping\" FROM \"DailyStats\" WHERE $__timeFilter(time) GROUP BY 1 ORDER BY 1"
         }
       ],
       "timeFrom": "24h",

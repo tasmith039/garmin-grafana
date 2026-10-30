@@ -251,6 +251,35 @@ class Backend(PostgresTestCase):
         self.assertEqual(self.rows(c, 'SELECT x FROM "RollbackNew"'), [(3,)])
 
 
+class ConvertedQueries(PostgresTestCase):
+    """SQL from Grafana_Postgres/convert_to_postgres.py, run with Grafana's macros filled in."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        sys.path.insert(0, str(SRC.parent / "Grafana_Postgres"))
+        cls.convert = importlib.import_module("convert_to_postgres")
+
+    def run_sql(self, client, sql):
+        sql = sql.replace("$__timeFilter(time)", "TRUE").replace("$TimeZone", "UTC")
+        return self.rows(client, sql)
+
+    def test_last_and_first_skip_points_without_the_field(self):
+        c = self.client()
+        # the newest and oldest points of the day don't have restingHeartRate, as InfluxDB's last()/first() ignore
+        c.write_points([{"measurement": "DailyStats", "time": t, "tags": {}, "fields": f} for t, f in [
+            ("2026-01-02T01:00:00Z", {"totalSteps": 10}),
+            ("2026-01-02T02:00:00Z", {"restingHeartRate": 50}),
+            ("2026-01-02T03:00:00Z", {"restingHeartRate": 52}),
+            ("2026-01-02T04:00:00Z", {"totalSteps": 20}),
+        ]])
+        for kind, want in (("last", 52), ("first", 50)):
+            sql = self.convert.builder_sql({"measurement": "DailyStats", "tz": "$TimeZone", "tags": [],
+                                            "select": [[{"type": "field", "params": ["restingHeartRate"]}, {"type": kind, "params": []}]],
+                                            "groupBy": [{"type": "time", "params": ["1d"]}, {"type": "fill", "params": ["null"]}]})
+            self.assertEqual([r[1] for r in self.run_sql(c, sql)], [want], kind)
+
+
 class FakeGarmin:
     """The few Garmin Connect calls these tests make, answered with made-up data."""
     display_name = "tester"
