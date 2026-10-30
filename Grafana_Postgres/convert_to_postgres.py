@@ -208,7 +208,9 @@ def referenced_tables(dashboard):
                 m = found.setdefault(t["measurement"], {"tags": set(), "fields": set()})
                 for parts in t.get("select", []):
                     m["fields"].update(re.sub(r"::(tag|field)$", "", x["params"][0]) for x in parts if x["type"] == "field")
-                m["tags"].update(re.sub(r"::(tag|field)$", "", tg["key"]) for tg in t.get("tags", []))
+                for tg in t.get("tags", []):  # WHERE filters: a tag unless marked ::field
+                    key, hint = re.fullmatch(r"(.+?)(?:::(tag|field))?", tg["key"]).groups()
+                    m["fields" if hint == "field" else "tags"].add(key)
             walk(p)
     walk(dashboard)
     return found

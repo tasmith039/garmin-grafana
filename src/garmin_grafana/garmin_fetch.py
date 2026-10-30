@@ -215,7 +215,10 @@ def _is_http_status_error(err, status_code):
     return re.search(rf"\b{status_code}\b", str(err)) is not None
 
 # %%
+database_write_failures = 0 # failed writes so far, so the update loop can fetch the same dates again (postgres backend)
+
 def write_points_to_influxdb(points):
+    global database_write_failures
     write_chunk_size = 20000
     try:
         if len(points) != 0:
@@ -230,6 +233,7 @@ def write_points_to_influxdb(points):
                     influxdbclient.write(record=points[i:i + write_chunk_size])
             logging.info(f"Success : updated {DATABASE_BACKEND} database with new points")
     except DATABASE_ERRORS as err:
+        database_write_failures += 1
         logging.error("Write failed : Unable to connect with database! " + str(err))
 
 # %%
@@ -1828,8 +1832,12 @@ if __name__ == "__main__":
             last_watch_sync_time_UTC = datetime.fromtimestamp(int(garmin_obj.get_device_last_used().get('lastUsedDeviceUploadTime')/1000)).astimezone(pytz.timezone("UTC"))
             if last_influxdb_sync_time_UTC < last_watch_sync_time_UTC:
                 logging.info(f"Update found : Current watch sync time is {last_watch_sync_time_UTC} UTC")
+                failures_before = database_write_failures
                 fetch_write_bulk((last_influxdb_sync_time_UTC + local_timediff).strftime('%Y-%m-%d'), (last_watch_sync_time_UTC + local_timediff).strftime('%Y-%m-%d')) # Using local dates for deciding which dates to fetch in current iteration (see issue #25)
-                last_influxdb_sync_time_UTC = last_watch_sync_time_UTC
+                if DATABASE_BACKEND == 'postgres' and database_write_failures > failures_before:
+                    logging.warning("Some database writes failed : fetching the same dates again on the next update")
+                else:
+                    last_influxdb_sync_time_UTC = last_watch_sync_time_UTC
             else:
                 logging.info(f"No new data found : Current watch and influxdb sync time is {last_watch_sync_time_UTC} UTC")
             logging.info(f"waiting for {UPDATE_INTERVAL_SECONDS} seconds before next automatic update calls")

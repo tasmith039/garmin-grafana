@@ -4,7 +4,8 @@
 services:
   garmin-fetch-data:
     restart: unless-stopped
-    image: thisisarpanghosh/garmin-fetch-data:latest
+    build: . # builds the fetcher from this checkout; once a published image includes the PostgreSQL backend, replace these two lines with image: thisisarpanghosh/garmin-fetch-data:latest
+    image: garmin-fetch-data:local
     container_name: garmin-fetch-data
     # user: root # Runs the container as root user, uncomment this line if you are getting permission issues which can't be resolved otherwise. For this, you also need to change the below volume mount from './garminconnect-tokens:/home/appuser/.garminconnect' to './garminconnect-tokens:/root/.garminconnect' to ensure the token files persist during container rebuilding.
     depends_on:

@@ -7,6 +7,8 @@ InfluxDB's behaviour, so nothing upstream of write_points() has to change:
   and one column per field. New tags and fields add columns as they appear (schemaless like Influx).
 - A point is identified by its time and tag values. Writing it again overwrites the fields it
   carries and leaves the others alone, which is how InfluxDB merges re-fetched data.
+- Missing values (None) are left out, as the InfluxDB clients do: a field set to None keeps its
+  stored value, and a tag set to None counts as absent.
 - Field types follow the first value seen; an integer column widens to double precision when a
   float arrives, and values that can't be stored in a column's type are skipped with a warning
   (InfluxDB rejects those writes).
@@ -40,11 +42,26 @@ def _as_time(value):
 
 class PostgresClient:
     def __init__(self, host, port, user, password, database, sslmode="prefer", timescale=False):
-        self.conn = psycopg.connect(host=host, port=port, user=user, password=password, dbname=database,
-                                    sslmode=sslmode, autocommit=True)
+        self.params = dict(host=host, port=port, user=user, password=password, dbname=database, sslmode=sslmode)
+        self._connect()
         self.timescale = timescale and self._has_timescale()
+
+    def _connect(self):
+        self.conn = psycopg.connect(**self.params, autocommit=True)
         self.columns = {}  # table -> {column: type}
         self.tags = {}     # table -> [tag columns, in key order]
+
+    def _retry(self, fn, *args):
+        """Run fn, and once more on a new connection if the old one was lost (database restarted, idle
+        connection dropped). Everything here is safe to repeat: writes are upserts."""
+        try:
+            return fn(*args)
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            if not self.conn.closed and not self.conn.broken:
+                raise
+            logging.warning("Lost the PostgreSQL connection, reconnecting")
+            self._connect()  # also forgets the cached schema, in case a change didn't finish
+            return fn(*args)
 
     # ------------------------------------------------------------------ schema
 
@@ -126,10 +143,14 @@ class PostgresClient:
 
     def write_points(self, points):
         """Upsert points; same time + tags overwrites the fields given, like InfluxDB."""
+        return self._retry(self._write_points, points)
+
+    def _write_points(self, points):
         batches = defaultdict(list)
         for p in points:
-            table, tags = p["measurement"], {k: str(v) for k, v in (p.get("tags") or {}).items()}
-            fields = dict(p.get("fields") or {})
+            table = p["measurement"]
+            tags = {k: str(v) for k, v in (p.get("tags") or {}).items() if v is not None}
+            fields = {k: v for k, v in (p.get("fields") or {}).items() if v is not None}
             self._ensure(table, tags, fields)
             for name, value in list(fields.items()):
                 if not self._fits(table, name, value):
@@ -137,8 +158,7 @@ class PostgresClient:
                     del fields[name]
             if not fields:
                 continue
-            row_tags = {t: tags.get(t, "") for t in self.tags[table]}
-            batches[(table, tuple(sorted(fields)))].append((_as_time(p["time"]), row_tags, fields))
+            batches[(table, tuple(sorted(fields)))].append((_as_time(p["time"]), tags, fields))
         with self.conn.transaction():
             for (table, names), rows in batches.items():
                 key = ["time", *self.tags[table]]
@@ -149,7 +169,8 @@ class PostgresClient:
                     k=sql.SQL(", ").join(map(sql.Identifier, key)),
                     u=sql.SQL(", ").join(sql.SQL("{0} = EXCLUDED.{0}").format(sql.Identifier(n)) for n in names))
                 with self.conn.cursor() as cur:
-                    cur.executemany(stmt, [[t, *(tg[k] for k in self.tags[table]), *(f[n] for n in names)]
+                    # tags as of the whole batch: a later point may have added one an earlier point lacks
+                    cur.executemany(stmt, [[t, *(tg.get(k, "") for k in self.tags[table]), *(f[n] for n in names)]
                                            for t, tg, f in rows])
         return True
 
@@ -158,6 +179,9 @@ class PostgresClient:
         data an account doesn't have show "No data" instead of a "relation does not exist" error.
         schema: {measurement: {"tags": [names], "fields": [names]}} (postgres_dashboard_tables.json).
         Fields start as double precision; the first real value written retypes an empty column."""
+        self._retry(self._ensure_tables, schema)
+
+    def _ensure_tables(self, schema):
         for table, cols in schema.items():
             self._ensure(table, dict.fromkeys(cols.get("tags", []), ""), dict.fromkeys(cols.get("fields", []), 0.0))
 
@@ -170,6 +194,9 @@ class PostgresClient:
 
     def last_time(self, measurement):
         """Newest point's time in a measurement, or None."""
+        return self._retry(self._last_time, measurement)
+
+    def _last_time(self, measurement):
         try:
             return self.conn.execute(sql.SQL("SELECT max(time) FROM {}").format(sql.Identifier(measurement))).fetchone()[0]
         except psycopg.errors.UndefinedTable:
@@ -177,6 +204,9 @@ class PostgresClient:
 
     def delete_series(self, measurement, tags):
         """Delete every point of a measurement whose tags match (InfluxDB's DROP SERIES ... WHERE)."""
+        return self._retry(self._delete_series, measurement, tags)
+
+    def _delete_series(self, measurement, tags):
         if measurement not in self.columns:
             self._load(measurement)
         if not self.columns[measurement]:

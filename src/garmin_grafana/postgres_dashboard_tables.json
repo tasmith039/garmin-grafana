@@ -15,10 +15,9 @@
   ]
  },
  "ActivitySummary": {
-  "tags": [
-   "activityType"
-  ],
+  "tags": [],
   "fields": [
+   "activityType",
    "averageHR",
    "bmrCalories",
    "calories",
